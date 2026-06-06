@@ -1,4 +1,4 @@
-{
+export default function(ctx) {
   const { root, go, onCleanup } = ctx;
   const cleanup = [];
 
@@ -185,7 +185,6 @@
     .search-section{padding:0 var(--page-pad);position:relative}
     .search-wrapper{position:relative;display:flex;gap:10px}
     .search-input-container{flex:1;position:relative}
-    /* ✅ FIX: Prevent iOS auto-zoom on input focus */
     .search-input{width:100%;padding:12px 42px 12px 42px;border-radius:16px;border:1.5px solid rgba(255,255,255,.08);background:rgba(15,40,84,.35);color:white;font-family:'Cairo';font-size:clamp(1rem,2vw,1.1rem);font-weight:600;outline:none;transition:all .2s ease;box-shadow:0 8px 24px rgba(0,0,0,.1)}
     .search-input::placeholder{color:rgba(255,255,255,.45)}
     .search-input:focus{border-color:rgba(255,202,40,.6);background:rgba(15,40,84,.5);box-shadow:0 0 20px rgba(255,202,40,.12), inset 0 0 20px rgba(255,202,40,.03)}
