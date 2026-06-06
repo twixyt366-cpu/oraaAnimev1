@@ -1,4 +1,4 @@
-export default function(ctx) {
+export default async function homePage(ctx) {
   const { root, go, onCleanup } = ctx;
   const cleanup = [];
 
@@ -423,9 +423,7 @@ export default function(ctx) {
   root.addEventListener('click', navHandler);
   cleanup.push(() => root.removeEventListener('click', navHandler));
 
-  // ═══════════════════════════════════════════════════
   // ✅ FIX: Prevent Enter key from refreshing page
-  // ═══════════════════════════════════════════════════
   const searchInput = $('#searchInput');
   if (searchInput) {
     const preventEnter = (e) => {
@@ -756,9 +754,9 @@ export default function(ctx) {
   window.addEventListener('scroll', onScroll, { passive: true });
   cleanup.push(() => window.removeEventListener('scroll', onScroll));
 
-  // ═══════════════════════════════════════════════════
+  // ============================================================
   // 14. AEGIS ENGINE INTEGRATION (FIXED - Guaranteed Load)
-  // ═══════════════════════════════════════════════════
+  // ============================================================
   dom.heroSection?.classList.add('ready');
 
   let engine = null;
