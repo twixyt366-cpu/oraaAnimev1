@@ -1,10 +1,14 @@
 export default async function homePage(ctx) {
   const { root, go, onCleanup } = ctx;
   const cleanup = [];
+  let isDead = false;
 
-  // ============================================================
+  const markDead = () => { isDead = true; };
+  const safeRun = (fn) => { if (isDead) return; try { fn(); } catch (e) { console.warn(e); } };
+
+  // ═══════════════════════════════════════════════════
   // 1. META & SEO
-  // ============================================================
+  // ═══════════════════════════════════════════════════
   const setMeta = (name, content) => {
     let el = document.head.querySelector(`meta[name="${name}"]`);
     if (!el) {
@@ -14,16 +18,29 @@ export default async function homePage(ctx) {
     }
     el.setAttribute('content', content);
   };
+  const setMetaProperty = (property, content) => {
+    let el = document.head.querySelector(`meta[property="${property}"]`);
+    if (!el) {
+      el = document.createElement('meta');
+      el.setAttribute('property', property);
+      document.head.appendChild(el);
+    }
+    el.setAttribute('content', content);
+  };
 
   setMeta('viewport', 'width=device-width, initial-scale=1.0, viewport-fit=cover');
   setMeta('theme-color', '#0a1a3a');
+  setMeta('description', 'OraaSlayer - المنصة العربية الأولى للأنمي');
+  setMetaProperty('og:title', 'OraaSlayer | الرئيسية');
+  setMetaProperty('og:description', 'المنصة العربية الأولى للأنمي');
   document.title = 'OraaSlayer | الرئيسية';
   window.scrollTo({ top: 0, behavior: 'instant' });
 
-  // ============================================================
-  // 2. FONT LOADING
-  // ============================================================
+  // ═══════════════════════════════════════════════════
+  // 2. FONT LOADING (idempotent, with preload hint)
+  // ═══════════════════════════════════════════════════
   if (!document.getElementById('font-cairo')) {
+    // Preconnect already in index.html — here we just inject stylesheet
     const link = document.createElement('link');
     link.id = 'font-cairo';
     link.rel = 'stylesheet';
@@ -31,13 +48,14 @@ export default async function homePage(ctx) {
     document.head.appendChild(link);
   }
 
-  // ============================================================
+  // ═══════════════════════════════════════════════════
   // 3. HTML & CSS
-  // ============================================================
+  // ═══════════════════════════════════════════════════
   root.innerHTML = `
 <style>
     :root {
         --c1: #0F2854; --c2: #1C4D8D; --c3: #4988C4; --c4: #BDE8F5; --gold: #FFCA28;
+        --gold-soft: rgba(255, 202, 40, 0.15);
         --text-light: #FFFFFF; --text-dim: rgba(255, 255, 255, 0.82);
         --bg-card: rgba(15, 40, 84, 0.60); --border-subtle: rgba(189, 232, 245, 0.15);
         --role-vip: #FFCA28; --role-admin: #FF5C7A; --role-manager: #5CD6FF;
@@ -48,38 +66,41 @@ export default async function homePage(ctx) {
         --page-pad: clamp(0.5rem, 1.4vw, 1.2rem); --card-min: clamp(132px, 18vw, 180px);
         --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px);
         --app-height: 100vh;
+        --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+        --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
     html{scroll-behavior:smooth;width:100%;max-width:100%}
     body{font-family:'Cairo',sans-serif;color:var(--text-light);direction:rtl;min-height:100vh;overflow-x:hidden;background-color:var(--c1);text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:pan-y;overscroll-behavior-y:auto}
     img,video,iframe,canvas,svg{max-width:100%;height:auto}
-    
+
     button,a,input,.anime-card,.slide,.user-profile,.menu-btn,.nav-item,.ds-link,.ms-link,.dot,.close-btn,.filter-chip,.filter-toggle-btn,.slider-nav,.account-action{touch-action:manipulation;-webkit-user-select:none;user-select:none}
 
-    .animated-bg{position:fixed;inset:0;z-index:-2;background:radial-gradient(1100px circle at 15% 15%,rgba(73,136,196,.2),transparent 35%),radial-gradient(900px circle at 85% 10%,rgba(255,202,40,.1),transparent 28%),linear-gradient(160deg,var(--c1) 0%,#0a1a3a 40%,var(--c2) 70%,#0d2248 100%)}
+    .animated-bg{position:fixed;inset:0;z-index:-2;background:radial-gradient(1100px circle at 15% 15%,rgba(73,136,196,.2),transparent 35%),radial-gradient(900px circle at 85% 10%,rgba(255,202,40,.1),transparent 28%),linear-gradient(160deg,var(--c1) 0%,#0a1a3a 40%,var(--c2) 70%,#0d2248 100%);will-change:background-position}
     .pixel-container{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;display:none}
     @media(min-width:768px){.pixel-container{display:block}.animated-bg{background:radial-gradient(1100px circle at 15% 15%,rgba(73,136,196,.2),transparent 35%),radial-gradient(900px circle at 85% 10%,rgba(255,202,40,.1),transparent 28%),linear-gradient(-45deg,var(--c1),var(--c2),var(--c3),var(--c4));background-size:400% 400%;animation:gradientFlow 25s ease infinite}}
     @keyframes gradientFlow{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
-    .pixel{position:absolute;background:rgba(189,232,245,.1);bottom:-150px;border-radius:4px;animation:floatUp 30s linear infinite;contain:layout style paint}
+    .pixel{position:absolute;background:rgba(189,232,245,.1);bottom:-150px;border-radius:4px;animation:floatUp 30s linear infinite;contain:layout style paint;will-change:transform}
     .pixel:nth-child(1){left:10%;width:40px;height:40px;animation-delay:0s;opacity:.3}
     .pixel:nth-child(2){left:40%;width:25px;height:25px;animation-delay:8s}
     .pixel:nth-child(3){left:70%;width:35px;height:35px;animation-delay:15s;opacity:.25}
     @keyframes floatUp{0%{transform:translate3d(0,0,0) rotate(0deg);opacity:0}10%{opacity:.3}90%{opacity:.3}100%{transform:translate3d(0,-1100px,0) rotate(360deg);opacity:0}}
 
-    .main-header{position:fixed;top:0;left:0;right:0;height:calc(var(--header-height) + var(--safe-top));padding-top:var(--safe-top);background:rgba(10,26,58,0.55);backdrop-filter:blur(32px) saturate(180%);-webkit-backdrop-filter:blur(32px) saturate(180%);display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding-inline:var(--page-pad);z-index:1000;contain:layout paint style;transition:background .4s ease,box-shadow .4s ease;border-bottom:1px solid rgba(255,255,255,0.05)}
+    .main-header{position:fixed;top:0;left:0;right:0;height:calc(var(--header-height) + var(--safe-top));padding-top:var(--safe-top);background:rgba(10,26,58,0.55);backdrop-filter:blur(32px) saturate(180%);-webkit-backdrop-filter:blur(32px) saturate(180%);display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding-inline:var(--page-pad);z-index:1000;contain:layout paint style;transition:background .4s var(--ease-out),box-shadow .4s var(--ease-out);border-bottom:1px solid rgba(255,255,255,0.05)}
     .main-header::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;background:linear-gradient(90deg,transparent,rgba(255,202,40,.45),transparent);pointer-events:none;opacity:0;transition:opacity .3s ease}
     .main-header--scrolled{background:rgba(8,20,48,0.92);box-shadow:0 8px 32px rgba(0,0,0,.55);border-bottom-color:rgba(255,255,255,0.08)}
     .main-header--scrolled::after{opacity:1}
-    
+
     .header-flex{display:flex;align-items:center;gap:.7rem;min-width:0}
-    .menu-btn{width:40px;height:40px;border-radius:13px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--c4);transition:all .2s ease;flex-shrink:0}
+    .menu-btn{width:40px;height:40px;border-radius:13px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--c4);transition:all .2s var(--ease-out);flex-shrink:0}
     @media(min-width:1024px){.menu-btn{display:none}}
     .menu-btn:active{transform:scale(.94);background:rgba(255,255,255,.15)}
     .menu-btn svg{width:20px;height:20px;stroke-width:2}
-    .logo-link{display:flex;align-items:center;gap:.55rem;text-decoration:none;min-width:0}
+    .logo-link{display:flex;align-items:center;gap:.55rem;text-decoration:none;min-width:0;transition:opacity .2s}
+    .logo-link:active{opacity:.7}
     .logo-text{font-size:clamp(.95rem,2vw,1.25rem);font-weight:900;color:var(--c4);text-shadow:0 2px 4px rgba(0,0,0,.3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:clamp(110px,30vw,260px);letter-spacing:.2px}
 
-    .slider-toggle-btn{width:40px;height:40px;border-radius:13px;background:rgba(255,202,40,.1);border:1px solid rgba(255,202,40,.2);display:none;align-items:center;justify-content:center;cursor:pointer;color:var(--gold);transition:all .25s ease;flex-shrink:0;position:relative}
+    .slider-toggle-btn{width:40px;height:40px;border-radius:13px;background:rgba(255,202,40,.1);border:1px solid rgba(255,202,40,.2);display:none;align-items:center;justify-content:center;cursor:pointer;color:var(--gold);transition:all .25s var(--ease-out);flex-shrink:0;position:relative}
     .slider-toggle-btn:hover{background:rgba(255,202,40,.2);transform:translateY(-1px)}
     .slider-toggle-btn:active{transform:scale(.94)}
     .slider-toggle-btn svg{width:20px;height:20px;stroke-width:2}
@@ -91,7 +112,7 @@ export default async function homePage(ctx) {
     .dts-inner{max-width:var(--content-max);margin:0 auto;display:flex;align-items:center;gap:16px}
     .dts-label{font-size:.72rem;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:1px;white-space:nowrap;flex-shrink:0;display:flex;align-items:center;gap:6px}
     .dts-track{flex:1;overflow:hidden;position:relative;mask-image:linear-gradient(to left,transparent,black 8%,black 92%,transparent);-webkit-mask-image:linear-gradient(to left,transparent,black 8%,black 92%,transparent)}
-    .dts-content{display:flex;gap:20px;animation:dtsScroll 35s linear infinite;width:max-content}
+    .dts-content{display:flex;gap:20px;animation:dtsScroll 35s linear infinite;width:max-content;will-change:transform}
     @keyframes dtsScroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
     .dts-item{display:flex;align-items:center;gap:8px;padding:6px 14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:999px;font-size:.78rem;font-weight:700;color:var(--text-dim);white-space:nowrap;cursor:pointer;transition:all .2s ease}
     .dts-item:hover{background:rgba(255,202,40,.12);border-color:rgba(255,202,40,.3);color:var(--gold)}
@@ -99,9 +120,9 @@ export default async function homePage(ctx) {
     .dts-close{width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-dim);transition:all .2s;flex-shrink:0}
     .dts-close:hover{background:rgba(255,92,122,.18);color:#FF5C7A;border-color:rgba(255,92,122,.3)}
 
-    .user-profile{display:flex;align-items:center;flex-direction:row;gap:.6rem;padding:5px 10px 5px 12px;border-radius:999px;background:rgba(0,0,0,.2);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);cursor:pointer;border:1.5px solid var(--role-accent-soft);transition:all .25s ease;position:relative;max-width:min(42vw,320px);box-shadow:0 6px 20px rgba(0,0,0,.2)}
+    .user-profile{display:flex;align-items:center;flex-direction:row;gap:.6rem;padding:5px 10px 5px 12px;border-radius:999px;background:rgba(0,0,0,.2);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);cursor:pointer;border:1.5px solid var(--role-accent-soft);transition:all .25s var(--ease-out);position:relative;max-width:min(42vw,320px);box-shadow:0 6px 20px rgba(0,0,0,.2)}
     .user-profile:hover{background:rgba(0,0,0,.4);border-color:var(--role-accent);box-shadow:0 0 0 2px var(--role-accent-soft),0 10px 28px rgba(0,0,0,.3),0 0 20px var(--role-accent-soft);transform:translateY(-1px)}
-    .avatar-wrap{width:36px;height:36px;border-radius:50%;overflow:hidden;border:2px solid var(--role-accent);box-shadow:0 0 14px var(--role-accent-soft);flex-shrink:0;background:rgba(255,255,255,.08);transition:box-shadow .3s ease}
+    .avatar-wrap{width:36px;height:36px;border-radius:50%;overflow:hidden;border:2px solid var(--role-accent);box-shadow:0 0 14px var(--role-accent-soft);flex-shrink:0;background:rgba(255,255,255,.08);transition:box-shadow .3s ease;position:relative}
     .user-profile:hover .avatar-wrap{box-shadow:0 0 20px var(--role-accent-soft),0 0 30px rgba(255,202,40,.1)}
     .avatar-wrap img{width:100%;height:100%;object-fit:cover;display:block}
     .user-details{display:flex;flex-direction:column;min-width:0;line-height:1.05}
@@ -116,7 +137,7 @@ export default async function homePage(ctx) {
     .role-badge.role-guest{background:rgba(182,194,209,.14);color:var(--role-guest);border-color:rgba(182,194,209,.25)}
     .user-role{font-size:.62rem;color:rgba(255,255,255,.72);font-weight:600;white-space:nowrap;margin-top:2px;text-align:right}
 
-    .account-popover{position:fixed;top:calc(var(--header-height) + var(--safe-top) + 10px);inset-inline-end:var(--page-pad);width:min(92vw,350px);opacity:0;visibility:hidden;transform:translate3d(0,-12px,0) scale(.97);transform-origin:top left;transition:opacity .25s ease,transform .28s cubic-bezier(.34,1.56,.64,1),visibility .25s;z-index:1600;direction:rtl;text-align:right}
+    .account-popover{position:fixed;top:calc(var(--header-height) + var(--safe-top) + 10px);inset-inline-end:var(--page-pad);width:min(92vw,350px);opacity:0;visibility:hidden;transform:translate3d(0,-12px,0) scale(.97);transform-origin:top left;transition:opacity .25s ease,transform .28s var(--ease-spring),visibility .25s;z-index:1600;direction:rtl;text-align:right}
     @media(min-width:1024px){.account-popover{transform-origin:top right}}
     .account-popover.show{opacity:1;visibility:visible;transform:translate3d(0,0,0) scale(1)}
     .account-card{background:rgba(8,20,48,.94);border:1.5px solid var(--role-accent-soft);backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);border-radius:22px;box-shadow:0 28px 70px rgba(0,0,0,.55),0 0 20px var(--role-accent-soft);overflow:hidden;direction:rtl;text-align:right;transition:border-color .3s ease,box-shadow .3s ease}
@@ -139,41 +160,42 @@ export default async function homePage(ctx) {
     .locked-tag{font-size:.62rem;font-weight:800;color:rgba(255,255,255,.72);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);padding:3px 7px;border-radius:999px;white-space:nowrap}
     .account-foot{padding:12px 16px 16px;font-size:.68rem;color:rgba(255,255,255,.45);border-top:1px solid rgba(255,255,255,.05)}
 
-    .news-ticker{background:rgba(10,25,50,.35);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);margin:0 var(--page-pad);border-radius:13px;padding:8px 0;overflow:hidden;border:1px solid rgba(255,202,40,.08)}
+    .news-ticker{background:rgba(10,25,50,.35);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);margin:0 var(--page-pad);border-radius:13px;padding:8px 0;overflow:hidden;border:1px solid rgba(255,202,40,.08);contain:layout paint}
     .ticker-content{display:inline-block;white-space:nowrap;animation:tickerScroll 35s linear infinite;font-size:.8rem;font-weight:700;color:var(--gold);padding-left:100%;will-change:transform;text-shadow:0 0 8px rgba(255,202,40,.15)}
     @keyframes tickerScroll{0%{transform:translate3d(0,0,0)}100%{transform:translate3d(-100%,0,0)}}
 
     .main-content{padding-top:calc(var(--header-height) + var(--safe-top));padding-bottom:calc(var(--footer-height) + var(--safe-bottom) + 12px);min-height:var(--app-height);transition:none}
     @media(min-width:1024px){.main-content{padding-right:var(--sidebar-width);padding-bottom:0}}
 
-    .hero-section{padding:0;opacity:0;transition:opacity .5s ease}
+    .hero-section{padding:0;opacity:0;transition:opacity .5s var(--ease-out)}
     .hero-section.ready{opacity:1}
     .hero-shell{margin:0;overflow:hidden;position:relative;background:var(--c1);border:none;box-shadow:none;border-radius:0}
-    
-    .slider-container{position:relative;width:100%;height:clamp(195px,48vw,440px);overflow:hidden;background:rgba(15,40,84,.38);contain:strict;touch-action:pan-y}
-    .slider-skeleton{width:100%;height:100%;background:linear-gradient(90deg, rgba(15,40,84,.6) 0%, rgba(28,77,141,.6) 50%, rgba(15,40,84,.6) 100%);background-size:200% 100%;animation:shimmer 1.5s infinite;position:relative;overflow:hidden}
-    .slider-skeleton-text{position:absolute;bottom:16px;right:16px;left:16px}
-    .slider-skeleton-line{height:14px;border-radius:6px;background:rgba(255,255,255,.08);margin-bottom:8px}
+
+    .slider-container{position:relative;width:100%;height:clamp(195px,48vw,440px);overflow:hidden;background:rgba(15,40,84,.38);contain:strict;touch-action:pan-y;isolation:isolate}
+    .slider-skeleton{width:100%;height:100%;background:linear-gradient(90deg, rgba(15,40,84,.6) 0%, rgba(28,77,141,.6) 50%, rgba(15,40,84,.6) 100%);background-size:200% 100%;animation:shimmer 1.5s infinite;position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:20px}
+    .slider-skeleton-text{width:100%}
+    .slider-skeleton-line{height:14px;border-radius:6px;background:rgba(255,255,255,.08);margin-bottom:8px;animation:pulse 1.4s ease infinite}
     .slider-skeleton-line.w60{width:60%}.slider-skeleton-line.w40{width:40%;height:10px}
-    
+    @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+
     .slider-track{display:flex;height:100%;transition:transform .65s cubic-bezier(.45,0,.55,1);will-change:transform;transform:translate3d(0,0,0);position:relative;z-index:2;direction:ltr}
-    .slide{flex:0 0 100%;position:relative;cursor:pointer;overflow:hidden;-webkit-user-select:none;user-select:none}
+    .slide{flex:0 0 100%;position:relative;cursor:pointer;overflow:hidden;-webkit-user-select:none;user-select:none;contain:layout style paint}
     .slide::after{content:'';position:absolute;inset:0;background:linear-gradient(to top,rgba(6,16,36,1) 0%,rgba(6,16,36,.65) 35%,rgba(6,16,36,.2) 60%,transparent 80%);pointer-events:none;z-index:2}
-    .slide-media{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;filter:saturate(1.1) contrast(1.05);pointer-events:none;transition:transform 1.2s cubic-bezier(.25,.46,.45,.94)}
+    .slide-media{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;filter:saturate(1.1) contrast(1.05);pointer-events:none;transition:transform 1.2s cubic-bezier(.25,.46,.45,.94);will-change:transform}
     .slide:hover .slide-media{transform:scale(1.05)}
-    .slide-content{position:absolute;bottom:20px;right:20px;left:20px;z-index:5}
+    .slide-content{position:absolute;bottom:20px;right:20px;left:20px;z-index:5;transform:translateZ(0)}
     .slide-badge{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-size:.62rem;font-weight:800;background:rgba(255,202,40,.95);color:#000;margin-left:4px;box-shadow:0 2px 6px rgba(255,202,40,.3)}
     .slide-title{font-size:clamp(1.02rem,2vw,1.25rem);font-weight:900;color:#fff;margin-bottom:5px;text-shadow:0 2px 12px rgba(0,0,0,.65);display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
     .slide-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
     .slide-meta-chip{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:.58rem;font-weight:800;background:rgba(255,255,255,.1);color:rgba(255,255,255,.86);border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
     .slider-dots{position:absolute;bottom:10px;left:50%;transform:translate3d(-50%,0,0);display:flex;gap:8px;z-index:10}
-    .dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.3);border:none;cursor:pointer;transition:.3s;padding:0}
+    .dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.3);border:none;cursor:pointer;transition:width .3s var(--ease-out),background .3s;padding:0;will-change:width}
     .dot.active{background:var(--gold);width:22px;border-radius:4px;box-shadow:0 0 12px var(--gold)}
-    
-    .slider-nav{position:absolute;top:50%;transform:translateY(-50%);z-index:15;width:46px;height:46px;border-radius:50%;background:rgba(10,28,60,.7);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;transition:opacity .25s ease, background .2s;box-shadow:0 4px 16px rgba(0,0,0,.35)}
+
+    .slider-nav{position:absolute;top:50%;transform:translate3d(0,-50%,0);z-index:15;width:46px;height:46px;border-radius:50%;background:rgba(10,28,60,.7);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;transition:opacity .25s ease, background .2s, transform .2s;box-shadow:0 4px 16px rgba(0,0,0,.35);will-change:opacity,transform}
     .slider-container:hover .slider-nav{opacity:1}
     .slider-nav:hover{background:rgba(255,202,40,.35);border-color:rgba(255,202,40,.5)}
-    .slider-nav:active{transform:translateY(-50%) scale(.9)}
+    .slider-nav:active{transform:translate3d(0,-50%,0) scale(.9)}
     .slider-nav.prev{right:auto;left:12px}
     .slider-nav.next{right:12px;left:auto}
     .slider-nav svg{width:22px;height:22px;color:#fff;stroke-width:2;transition:color .2s ease;pointer-events:none}
@@ -181,11 +203,11 @@ export default async function homePage(ctx) {
     @media(max-width:768px){.slider-nav{opacity:0.8;pointer-events:auto;width:36px;height:36px;border-radius:12px}.slider-nav.prev{left:8px}.slider-nav.next{right:8px}.slider-nav svg{width:18px;height:18px}}
     @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
-    .search-filter-sticky{position:sticky;top:calc(var(--header-height) + var(--safe-top));z-index:50;background:rgba(10,25,55,.65);backdrop-filter:blur(24px) saturate(150%);-webkit-backdrop-filter:blur(24px) saturate(150%);padding-top:.8rem;padding-bottom:.4rem;border-bottom:1px solid rgba(255,255,255,.04)}
+    .search-filter-sticky{position:sticky;top:calc(var(--header-height) + var(--safe-top));z-index:50;background:rgba(10,25,55,.65);backdrop-filter:blur(24px) saturate(150%);-webkit-backdrop-filter:blur(24px) saturate(150%);padding-top:.8rem;padding-bottom:.4rem;border-bottom:1px solid rgba(255,255,255,.04);contain:layout style}
     .search-section{padding:0 var(--page-pad);position:relative}
     .search-wrapper{position:relative;display:flex;gap:10px}
     .search-input-container{flex:1;position:relative}
-    .search-input{width:100%;padding:12px 42px 12px 42px;border-radius:16px;border:1.5px solid rgba(255,255,255,.08);background:rgba(15,40,84,.35);color:white;font-family:'Cairo';font-size:clamp(1rem,2vw,1.1rem);font-weight:600;outline:none;transition:all .2s ease;box-shadow:0 8px 24px rgba(0,0,0,.1)}
+    .search-input{width:100%;padding:12px 42px 12px 42px;border-radius:16px;border:1.5px solid rgba(255,255,255,.08);background:rgba(15,40,84,.35);color:white;font-family:'Cairo';font-size:clamp(1rem,2vw,1.1rem);font-weight:600;outline:none;transition:all .2s var(--ease-out);box-shadow:0 8px 24px rgba(0,0,0,.1)}
     .search-input::placeholder{color:rgba(255,255,255,.45)}
     .search-input:focus{border-color:rgba(255,202,40,.6);background:rgba(15,40,84,.5);box-shadow:0 0 20px rgba(255,202,40,.12), inset 0 0 20px rgba(255,202,40,.03)}
     .search-icon{position:absolute;right:14px;top:14px;color:var(--gold);pointer-events:none}
@@ -196,13 +218,14 @@ export default async function homePage(ctx) {
     .search-clear.active{display:block}
     @keyframes spin{to{transform:translate3d(0,-50%,0) rotate(360deg)}}
 
-    .filter-toggle-btn{width:48px;height:48px;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--c4);transition:all .2s;flex-shrink:0;box-shadow:0 8px 22px rgba(0,0,0,.1);position:relative}
+    .filter-toggle-btn{width:48px;height:48px;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--c4);transition:all .2s var(--ease-out);flex-shrink:0;box-shadow:0 8px 22px rgba(0,0,0,.1);position:relative}
     .filter-toggle-btn svg{width:20px;height:20px;stroke-width:2}
     .filter-toggle-btn:hover{background:rgba(255,255,255,.1);border-color:var(--gold);color:var(--gold)}
     .filter-toggle-btn.has-filters::after{content:'';position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold)}
 
-    #suggestionsBox{position:absolute;top:100%;left:0;right:0;background:rgba(10,25,60,.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);border-radius:0 0 16px 16px;max-height:min(340px,48vh);overflow-y:auto;display:none;z-index:100;box-shadow:0 12px 30px rgba(0,0,0,.5)}
-    #suggestionsBox.active{display:block}
+    #suggestionsBox{position:absolute;top:100%;left:0;right:0;background:rgba(10,25,60,.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);border-radius:0 0 16px 16px;max-height:min(340px,48vh);overflow-y:auto;display:none;z-index:100;box-shadow:0 12px 30px rgba(0,0,0,.5);contain:layout style}
+    #suggestionsBox.active{display:block;animation:fadeInDown .2s var(--ease-out)}
+    @keyframes fadeInDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
     .suggestion-item{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;transition:background .15s;text-decoration:none;color:inherit;width:100%;border:0;background:transparent;text-align:right}
     .suggestion-item:hover,.suggestion-item.active{background:rgba(255,255,255,.06)}
     .suggestion-img{width:38px;height:54px;object-fit:cover;border-radius:6px;flex-shrink:0;background:rgba(255,255,255,.05)}
@@ -210,7 +233,7 @@ export default async function homePage(ctx) {
     .suggestion-title{font-size:.8rem;font-weight:700;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .suggestion-meta{font-size:.62rem;color:var(--c4);display:flex;gap:8px;margin-top:2px}
 
-    .filter-popover{position:absolute;top:110%;left:0;width:min(95vw,380px);background:rgba(10,25,55,.92);backdrop-filter:blur(36px) saturate(180%);-webkit-backdrop-filter:blur(36px) saturate(180%);border:1px solid rgba(255,255,255,.12);border-radius:24px;box-shadow:0 24px 60px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.04),0 0 40px rgba(255,202,40,.08);opacity:0;visibility:hidden;transform:translate3d(0,-10px,0) scale(.98);transform-origin:top left;transition:all .25s cubic-bezier(.4,0,.2,1);z-index:150;overflow:hidden}
+    .filter-popover{position:absolute;top:110%;left:0;width:min(95vw,380px);background:rgba(10,25,55,.92);backdrop-filter:blur(36px) saturate(180%);-webkit-backdrop-filter:blur(36px) saturate(180%);border:1px solid rgba(255,255,255,.12);border-radius:24px;box-shadow:0 24px 60px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.04),0 0 40px rgba(255,202,40,.08);opacity:0;visibility:hidden;transform:translate3d(0,-10px,0) scale(.98);transform-origin:top left;transition:all .25s var(--ease-out);z-index:150;overflow:hidden;contain:layout style}
     .filter-popover.show{opacity:1;visibility:visible;transform:translate3d(0,0,0) scale(1)}
     .fp-header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px 12px;border-bottom:1px solid rgba(255,255,255,.06)}
     .fp-title{font-size:.95rem;font-weight:800;color:#fff}
@@ -221,24 +244,25 @@ export default async function homePage(ctx) {
     .fp-group:last-child{margin-bottom:0}
     .fp-label{font-size:.72rem;font-weight:700;color:rgba(255,255,255,.5);margin-bottom:8px;display:block}
     .fp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(85px,1fr));gap:8px}
-    .fp-chip{padding:8px 6px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.7);font-family:'Cairo';font-size:.74rem;font-weight:700;cursor:pointer;text-align:center;transition:all .2s ease}
+    .fp-chip{padding:8px 6px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.7);font-family:'Cairo';font-size:.74rem;font-weight:700;cursor:pointer;text-align:center;transition:all .2s var(--ease-out)}
     .fp-chip:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.15)}
     .fp-chip.active{background:rgba(255,202,40,.15);color:var(--gold);border-color:rgba(255,202,40,.4);box-shadow:0 0 12px rgba(255,202,40,.1)}
     .fp-footer{padding:12px 20px 16px;border-top:1px solid rgba(255,255,255,.06)}
-    .fp-apply{width:100%;padding:12px;border-radius:16px;background:linear-gradient(180deg,rgba(255,202,40,.95),rgba(255,180,20,.95));color:#08111f;border:none;font-family:'Cairo';font-size:.95rem;font-weight:800;cursor:pointer;transition:transform .15s}
+    .fp-apply{width:100%;padding:12px;border-radius:16px;background:linear-gradient(180deg,rgba(255,202,40,.95),rgba(255,180,20,.95));color:#08111f;border:none;font-family:'Cairo';font-size:.95rem;font-weight:800;cursor:pointer;transition:transform .15s,box-shadow .2s}
     .fp-apply:active{transform:scale(.97)}
+    .fp-apply:hover{box-shadow:0 6px 20px rgba(255,202,40,.35)}
 
     .anime-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(var(--card-min),1fr));gap:clamp(10px,1.4vw,16px);padding:.5rem var(--page-pad) 1rem;max-width:var(--content-max);margin:0 auto;align-items:stretch}
     @media(min-width:768px){.anime-grid{gap:14px;grid-template-columns:repeat(auto-fit,minmax(165px,1fr))}}
     @media(min-width:1280px){.anime-grid{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}}
     @media(min-width:1440px){.anime-grid{grid-template-columns:repeat(auto-fit,minmax(185px,1fr))}}
 
-    .anime-card{position:relative;border-radius:20px;overflow:hidden;aspect-ratio:2/3;cursor:pointer;background:linear-gradient(180deg,rgba(18,43,88,.88) 0%,rgba(9,18,40,.95) 100%);border:1px solid rgba(189,232,245,.1);box-shadow:0 10px 28px rgba(0,0,0,.3);opacity:0;transform:translate3d(0,12px,0) scale(.98);transition:transform .28s cubic-bezier(.34,1.56,.64,1),box-shadow .28s ease,border-color .28s ease,opacity .35s ease;content-visibility:auto;contain:layout style paint;contain-intrinsic-size:180px 270px;min-width:0;min-height:0}
+    .anime-card{position:relative;border-radius:20px;overflow:hidden;aspect-ratio:2/3;cursor:pointer;background:linear-gradient(180deg,rgba(18,43,88,.88) 0%,rgba(9,18,40,.95) 100%);border:1px solid rgba(189,232,245,.1);box-shadow:0 10px 28px rgba(0,0,0,.3);opacity:0;transform:translate3d(0,12px,0) scale(.98);transition:transform .28s var(--ease-spring),box-shadow .28s ease,border-color .28s ease,opacity .35s ease;content-visibility:auto;contain:layout style paint;contain-intrinsic-size:180px 270px;min-width:0;min-height:0}
     .anime-card.visible{opacity:1;transform:translate3d(0,0,0) scale(1)}
     .anime-card:hover{transform:translate3d(0,-8px,0) scale(1.04);border-color:var(--gold);box-shadow:0 24px 48px rgba(0,0,0,.5),0 0 0 2px rgba(255,202,40,.25),0 0 30px rgba(255,202,40,.1);z-index:2}
     .anime-card:active{transform:scale(.97);transition-duration:.1s}
     .anime-card .card-media{position:absolute;inset:0;overflow:hidden}
-    .anime-card .card-image{width:100%;height:100%;object-fit:cover;display:block;opacity:0;background:rgba(0,0,0,.2);transform:scale(1.01);transition:opacity .3s ease,transform .5s cubic-bezier(.25,.46,.45,.94)}
+    .anime-card .card-image{width:100%;height:100%;object-fit:cover;display:block;opacity:0;background:rgba(0,0,0,.2);transform:scale(1.01);transition:opacity .3s ease,transform .5s cubic-bezier(.25,.46,.45,.94);will-change:transform,opacity}
     .anime-card .card-image.loaded,.anime-card .card-image.failed{opacity:1}
     .anime-card:hover .card-image{transform:scale(1.08)}
     .anime-card .card-glow{position:absolute;inset:0;background:radial-gradient(280px circle at var(--mx,50%) var(--my,50%),rgba(255,202,40,.18),transparent 50%);opacity:0;transition:opacity .2s ease;pointer-events:none;z-index:3}
@@ -258,30 +282,34 @@ export default async function homePage(ctx) {
 
     .no-results,.soft-fail{grid-column:1/-1;text-align:center;padding:50px 20px;color:var(--c4);font-size:1rem;font-weight:600}
     .soft-fail{border:1px solid rgba(189,232,245,.12);border-radius:20px;background:rgba(10,25,60,.48);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
-    .soft-fail button{margin-top:12px;padding:10px 18px;border:0;border-radius:14px;background:var(--gold);color:#000;font-weight:800;cursor:pointer;touch-action:manipulation;font-family:'Cairo'}
+    .soft-fail button{margin-top:12px;padding:10px 18px;border:0;border-radius:14px;background:var(--gold);color:#000;font-weight:800;cursor:pointer;touch-action:manipulation;font-family:'Cairo';transition:transform .15s,box-shadow .2s}
+    .soft-fail button:hover{box-shadow:0 6px 20px rgba(255,202,40,.35)}
+    .soft-fail button:active{transform:scale(.97)}
 
-    .bottom-nav{position:fixed;bottom:0;left:0;right:0;height:calc(var(--footer-height) + var(--safe-bottom));padding-bottom:var(--safe-bottom);background:rgba(10,28,60,.65);backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);display:flex;align-items:center;justify-content:space-around;z-index:999;border-top:1px solid rgba(189,232,245,.22);box-shadow:0 -10px 30px rgba(0,0,0,.35)}
+    .bottom-nav{position:fixed;bottom:0;left:0;right:0;height:calc(var(--footer-height) + var(--safe-bottom));padding-bottom:var(--safe-bottom);background:rgba(10,28,60,.65);backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);display:flex;align-items:center;justify-content:space-around;z-index:999;border-top:1px solid rgba(189,232,245,.22);box-shadow:0 -10px 30px rgba(0,0,0,.35);contain:layout paint}
     @media(min-width:1024px){.bottom-nav{display:none}}
-    .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;text-decoration:none;color:rgba(255,255,255,.45);transition:all .3s;position:relative}
+    .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;text-decoration:none;color:rgba(255,255,255,.45);transition:color .25s var(--ease-out),transform .2s;position:relative}
+    .nav-item:active{transform:scale(.92)}
     .nav-item.active{color:var(--gold)}
-    .nav-item.active::before{content:'';position:absolute;top:-1px;width:28px;height:3px;background:var(--gold);border-radius:0 0 5px 5px;box-shadow:0 0 14px var(--gold)}
-    .nav-icon-wrap{width:44px;height:28px;display:flex;align-items:center;justify-content:center}
-    .nav-item svg{width:24px;height:24px;transition:all .3s;stroke-width:1.8}
+    .nav-item.active::before{content:'';position:absolute;top:-1px;width:28px;height:3px;background:var(--gold);border-radius:0 0 5px 5px;box-shadow:0 0 14px var(--gold);animation:navPop .35s var(--ease-spring)}
+    @keyframes navPop{0%{width:0;opacity:0}100%{width:28px;opacity:1}}
+    .nav-icon-wrap{width:44px;height:28px;display:flex;align-items:center;justify-content:center;transition:transform .25s var(--ease-spring)}
+    .nav-item svg{width:24px;height:24px;transition:all .3s var(--ease-out);stroke-width:1.8}
     .nav-item.active svg{filter:drop-shadow(0 0 10px var(--gold));transform:scale(1.12)}
     .nav-label{font-size:.62rem;font-weight:700}
-    
-    .desktop-sidebar{position:fixed;top:0;right:0;width:var(--sidebar-width);height:100vh;background:rgba(8,20,45,.78);backdrop-filter:blur(32px) saturate(150%);-webkit-backdrop-filter:blur(32px) saturate(150%);border-left:1px solid rgba(189,232,245,.18);box-shadow:-6px 0 30px rgba(0,0,0,.45);z-index:998;display:none;flex-direction:column;padding-top:calc(var(--header-height) + var(--safe-top) + 10px);overflow-y:auto;transform:translate3d(0,0,0)}
+
+    .desktop-sidebar{position:fixed;top:0;right:0;width:var(--sidebar-width);height:100vh;background:rgba(8,20,45,.78);backdrop-filter:blur(32px) saturate(150%);-webkit-backdrop-filter:blur(32px) saturate(150%);border-left:1px solid rgba(189,232,245,.18);box-shadow:-6px 0 30px rgba(0,0,0,.45);z-index:998;display:none;flex-direction:column;padding-top:calc(var(--header-height) + var(--safe-top) + 10px);overflow-y:auto;transform:translate3d(0,0,0);contain:layout style}
     @media(min-width:1024px){.desktop-sidebar{display:flex}}
     .ds-header{padding:18px 20px 14px;border-bottom:1px solid rgba(255,255,255,.06)}
     .ds-header h3{font-size:.75rem;font-weight:700;color:var(--text-dim);opacity:.5;text-transform:uppercase;letter-spacing:1px}
     .ds-nav{padding:8px 10px;flex:1}
-    .ds-link{display:flex;align-items:center;flex-direction:row;gap:12px;padding:12px 15px;margin-bottom:2px;color:rgba(255,255,255,.55);text-decoration:none;font-size:.88rem;font-weight:600;border-radius:13px;transition:all .2s;text-align:right}
-    .ds-link:hover{background:rgba(189,232,245,.08);color:white}
+    .ds-link{display:flex;align-items:center;flex-direction:row;gap:12px;padding:12px 15px;margin-bottom:2px;color:rgba(255,255,255,.55);text-decoration:none;font-size:.88rem;font-weight:600;border-radius:13px;transition:all .2s var(--ease-out);text-align:right}
+    .ds-link:hover{background:rgba(189,232,245,.08);color:white;transform:translateX(-3px)}
     .ds-link.active{background:rgba(255,202,40,.12);color:var(--gold);border:1px solid rgba(255,202,40,.18);box-shadow:0 0 14px rgba(255,202,40,.06)}
-    .ds-link svg{width:20px;height:20px;color:var(--c3);flex-shrink:0;stroke-width:1.8}
+    .ds-link svg{width:20px;height:20px;color:var(--c3);flex-shrink:0;stroke-width:1.8;transition:color .2s}
     .ds-link.active svg{color:var(--gold);filter:drop-shadow(0 0 4px rgba(255,202,40,.4))}
     .ds-footer{padding:16px 20px;border-top:1px solid rgba(255,255,255,.05);font-size:.7rem;color:rgba(255,255,255,.3);text-align:center}
-    
+
     .sidebar-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1499;opacity:0;visibility:hidden;transition:.35s}
     .sidebar-overlay.show{opacity:1;visibility:visible}
     .mobile-sidebar{position:fixed;top:0;right:0;width:min(86vw,320px);height:100%;background:rgba(8,20,50,.94);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);z-index:1500;transform:translate3d(100%,0,0);transition:transform .38s cubic-bezier(.4,0,.2,1);overflow-y:auto;border-left:1px solid rgba(255,202,40,.38);box-shadow:-8px 0 30px rgba(0,0,0,.55)}
@@ -328,6 +356,12 @@ export default async function homePage(ctx) {
         .search-input{font-size:.9rem}
     }
     button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+
+    @media (prefers-reduced-motion: reduce) {
+        *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+        .animated-bg{animation:none!important}
+        .pixel,.live-dot,.ticker-content{animation:none!important;display:none!important}
+    }
 </style>
 <a href="#mainContent" class="skip-nav" style="position:absolute;top:-100px;left:0;background:var(--gold);color:#000;padding:8px 16px;z-index:10000;font-weight:800;transition:top .2s" onfocus="this.style.top='0'" onblur="this.style.top='-100px'">تخطي للمحتوى</a><div class="animated-bg"></div><div class="pixel-container"><span class="pixel"></span><span class="pixel"></span><span class="pixel"></span></div>
 <header class="main-header" id="mainHeader"><div class="header-flex"><button class="menu-btn" id="menuBtn" aria-label="القائمة" type="button"><i data-lucide="menu"></i></button><a data-link="/" href="/" class="logo-link"><span class="logo-text">OraaSlayer</span></a></div><div class="header-flex"><button class="slider-toggle-btn" id="sliderToggleBtn" aria-label="الإشعارات" type="button" title="آخر الأخبار"><i data-lucide="bell"></i></button><div class="user-profile" id="userProfile" role="button" aria-label="حساب المستخدم" tabindex="0" aria-expanded="false"><div class="avatar-wrap"><img id="headerAvatar" src="https://i.ibb.co/YRShYmn/avatar.png" alt="الصورة الشخصية" width="36" height="36" loading="eager" decoding="async"></div><div class="user-details"><div class="user-line"><span class="user-name" id="userName">زائر</span><span class="role-badge role-guest" id="roleBadge">GUEST</span></div><span class="user-role" id="roleLabel">اضغط للدخول</span></div></div></div></header>
@@ -348,32 +382,52 @@ export default async function homePage(ctx) {
 <aside class="mobile-sidebar" id="mobileSidebar"><div class="ms-header"><h2>القائمة</h2><button class="close-btn" id="closeSidebar" aria-label="إغلاق" type="button"><i data-lucide="x"></i></button></div><nav style="padding:0.5rem 0;"><a data-link="/" href="/" class="ms-link"><i data-lucide="home"></i> الرئيسية</a><a data-link="/newsanime" href="/newsanime" class="ms-link"><i data-lucide="newspaper"></i> أخبار الأنمي</a><a data-link="/new" href="/new" class="ms-link"><i data-lucide="palette"></i> المبدعين</a><a data-link="/event_gacha/spin" href="/event_gacha/spin" class="ms-link"><i data-lucide="gift"></i> هدايا و أحداث</a><a data-link="/favorites" href="/favorites" class="ms-link"><i data-lucide="heart"></i> المفضلة</a><a data-link="/chat" href="/chat" class="ms-link"><i data-lucide="message-circle"></i> الدردشة</a><a data-link="/redeem_cd" href="/redeem_cd" class="ms-link"><i data-lucide="ticket"></i> شحن كود</a><a data-link="/download" href="/download" class="ms-link"><i data-lucide="download"></i> تحميل التطبيق</a><a data-link="/about" href="/about" class="ms-link"><i data-lucide="info"></i> عن المنصة</a><a data-link="/policy" href="/policy" class="ms-link"><i data-lucide="shield"></i> سياسة الخصوصية</a></nav></aside>
 <footer class="bottom-nav"><a data-link="/" href="/" class="nav-item active"><div class="nav-icon-wrap"><i data-lucide="home"></i></div><span class="nav-label">الرئيسية</span></a><a data-link="/newsanime" href="/newsanime" class="nav-item"><div class="nav-icon-wrap"><i data-lucide="newspaper"></i></div><span class="nav-label">أخبار</span></a><a data-link="/event_gacha/spin" href="/event_gacha/spin" class="nav-item"><div class="nav-icon-wrap"><i data-lucide="gift"></i></div><span class="nav-label">هدايا</span></a><a data-link="/chat" href="/chat" class="nav-item"><div class="nav-icon-wrap"><i data-lucide="message-circle"></i></div><span class="nav-label">دردشة</span></a><a data-link="/profile" href="/profile" class="nav-item"><div class="nav-icon-wrap"><i data-lucide="user"></i></div><span class="nav-label">حسابي</span></a></footer>`;
 
-  // ============================================================
-  // 4. LUCIDE ICONS
-  // ============================================================
-  if (!window.lucide) {
-    await new Promise((res) => {
-      const s = document.createElement('script');
-      s.src = 'https://unpkg.com/lucide@latest/dist/umd/lucide.min.js';
-      s.async = true;
-      s.onload = res;
-      s.onerror = () => {
-        const s2 = document.createElement('script');
-        s2.src = 'https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js';
-        s2.async = true;
-        s2.onload = res;
-        s2.onerror = res;
-        document.head.appendChild(s2);
-      };
-      document.head.appendChild(s);
-    });
-  }
-  if (window.lucide?.createIcons) window.lucide.createIcons();
+  // ═══════════════════════════════════════════════════
+  // 4. STATE (centralized for better debugging)
+  // ═══════════════════════════════════════════════════
+  const state = {
+    slider: { current: 0, total: 0, interval: null, paused: false, data: [] },
+    search: { query: null, debounce: 0, suggestDebounce: 0, lastQuery: '' },
+    scroll: { ticking: false, isScrolling: false, stopTimer: null },
+    aegisEngine: null,
+    aegisAttempt: 0,
+    mountedAt: Date.now(),
+  };
 
-  // ============================================================
-  // 5. DOM CACHE
-  // ============================================================
+  const timers = { search: 0, suggest: 0, scroll: 0, slider: 0 };
+
+  // ═══════════════════════════════════════════════════
+  // 5. UTILITIES
+  // ═══════════════════════════════════════════════════
   const $ = (sel) => root.querySelector(sel);
+  const $$ = (sel) => Array.from(root.querySelectorAll(sel));
+  const DEFAULT_AVATAR = 'https://i.ibb.co/YRShYmn/avatar.png';
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
+  const b64 = (v) => {
+    try { return btoa(String(v)); }
+    catch {
+      const bytes = new TextEncoder().encode(String(v));
+      let bin = ''; for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      return btoa(bin);
+    }
+  };
+  const slugify = (text) => String(text || '').toLowerCase().trim().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-');
+  const safeParse = (i, fb) => { if (i == null) return fb; if (typeof i !== 'string') return i; try { return JSON.parse(i); } catch { return fb; } };
+  const hexToRgba = (hex, a = 0.28) => {
+    const h = String(hex || '').replace('#', '').trim();
+    const f = h.length === 3 ? h.split('').map(c => c + c).join('') : h.padEnd(6, '0').slice(0, 6);
+    const n = parseInt(f, 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  };
+  const vib = (p) => { try { navigator.vibrate?.(p); } catch {} };
+  const debounce = (fn, ms) => {
+    let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+  };
+  const raf = (fn) => requestAnimationFrame(fn);
+
+  // ═══════════════════════════════════════════════════
+  // 6. DOM CACHE
+  // ═══════════════════════════════════════════════════
   const dom = {
     heroSection: $('#heroSection'),
     menuBtn: $('#menuBtn'),
@@ -400,66 +454,54 @@ export default async function homePage(ctx) {
     dtsCloseBtn: $('#dtsCloseBtn'),
     sliderContainer: $('#sliderContainer'),
     sliderTrack: $('#sliderTrack'),
+    sliderSkeleton: $('#sliderSkeleton'),
     sliderPrev: $('#sliderPrev'),
     sliderNext: $('#sliderNext'),
     sliderDots: $('#sliderDots'),
+    searchInput: $('#searchInput'),
+    searchClear: $('#searchClear'),
+    searchSpinner: $('#searchSpinner'),
+    suggestionsBox: $('#suggestionsBox'),
+    filterBtn: $('#filterToggleBtn'),
+    filterPop: $('#filterPopover'),
+    filterApply: $('#filterApplyBtn'),
+    filterReset: $('#filterResetBtn'),
+    genreF: $('#genreFilters'),
+    formatF: $('#formatFilters'),
+    animeGrid: $('#animeGrid'),
+    ticker: $('#tickerContent'),
   };
 
-  // ============================================================
-  // 6. NAVIGATION DELEGATION (FIXED: Intercept links)
-  // ============================================================
+  if (dom.sliderTrack) {
+    dom.sliderTrack.style.cssText += ';direction:ltr;will-change:transform;';
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 7. NAVIGATION
+  // ═══════════════════════════════════════════════════
   const navHandler = (e) => {
     const link = e.target.closest('[data-link]');
     if (!link) return;
     e.preventDefault();
+    e.stopPropagation();
     let path = link.getAttribute('data-link') || link.getAttribute('href');
-    // Fix old query param format to path segment format
     const watchMatch = String(path).match(/\/watch\?id=([^&]+)&ep=(.+)$/);
-    if (watchMatch) {
-      path = `/watch/${watchMatch[1]}/${watchMatch[2]}`;
-    }
-    go(path);
+    if (watchMatch) path = `/watch/${watchMatch[1]}/${watchMatch[2]}`;
+    if (typeof go === 'function') go(path);
   };
   root.addEventListener('click', navHandler);
   cleanup.push(() => root.removeEventListener('click', navHandler));
 
-  // ✅ FIX: Prevent Enter key from refreshing page
-  const searchInput = $('#searchInput');
-  if (searchInput) {
-    const preventEnter = (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
-      }
-    };
-    searchInput.addEventListener('keydown', preventEnter);
-    cleanup.push(() => searchInput.removeEventListener('keydown', preventEnter));
+  // Prevent Enter on inputs
+  if (dom.searchInput) {
+    const preventEnter = (e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); return false; } };
+    dom.searchInput.addEventListener('keydown', preventEnter);
+    cleanup.push(() => dom.searchInput.removeEventListener('keydown', preventEnter));
   }
 
-  // ============================================================
-  // 7. AUTH INTEGRATION
-  // ============================================================
-  let authMod = null;
-  try {
-    authMod = await import('/api/auth.js');
-    if (authMod?.waitForAuth) await authMod.waitForAuth(5000);
-  } catch (err) {
-    console.warn('[Home] Auth module not loaded:', err.message);
-  }
-
-  const DEFAULT_AVATAR = 'https://i.ibb.co/YRShYmn/avatar.png';
-
-  // ============================================================
-  // 8. UI HELPERS
-  // ============================================================
-  const hexToRgba = (hex, a = 0.28) => {
-    const h = String(hex || '').replace('#', '').trim();
-    const f = h.length === 3 ? h.split('').map(c => c + c).join('') : h.padEnd(6, '0').slice(0, 6);
-    const n = parseInt(f, 16);
-    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
-  };
-
+  // ═══════════════════════════════════════════════════
+  // 8. ROLE & UI HELPERS
+  // ═══════════════════════════════════════════════════
   const normalizeRole = (r, loggedIn) => {
     const v = String(r || '').trim().toLowerCase();
     const roles = { vip: ['vip','premium'], admin: ['admin','administrator','adm'], manager: ['manager','manger','mgr'], staff: ['staff','staf'], member: ['member','user'] };
@@ -493,103 +535,13 @@ export default async function homePage(ctx) {
     if (dom.accountCard) dom.accountCard.style.borderColor = hexToRgba(meta.accent, 0.35);
   };
 
-  const handleLogout = async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const btn = e.currentTarget;
-    if (!btn || btn.disabled) return;
-    
-    btn.disabled = true;
-    btn.style.opacity = '0.6';
-    
-    try {
-      if (typeof firebase !== 'undefined' && firebase.auth) {
-        await firebase.auth().signOut();
-      }
-      const m = await import('/api/auth.js');
-      if (m.logout) await m.logout();
-      
-      if (window.__AUTH__) {
-        window.__AUTH__.isLoggedIn = false;
-        window.__AUTH__.user = null;
-        window.__AUTH__.ready = true;
-      }
-      
-      window.dispatchEvent(new CustomEvent('auth:changed', { 
-        detail: { isLoggedIn: false, displayName: 'زائر', role: 'guest', avatar: DEFAULT_AVATAR } 
-      }));
-      
-      closePopover();
-    } catch (err) {
-      console.error('[Home] Logout failed:', err);
-      alert('فشل تسجيل الخروج. حاول مرة أخرى.');
-    } finally {
-      btn.disabled = false;
-      btn.style.opacity = '1';
-    }
-  };
-
-  const setPopoverMode = (mode) => {
-    if (!dom.accountActions) return;
-    
-    if (mode === 'logged') {
-      dom.accountActions.innerHTML = `
-        <a class="account-action primary" data-link="/profile" href="/profile">
-          <i data-lucide="user-circle"></i><span class="action-label">الملف الشخصي</span>
-        </a>
-        <a class="account-action" data-link="/store" href="/store">
-          <i data-lucide="shopping-bag"></i><span class="action-label">المتجر</span>
-        </a>
-        <button class="account-action danger" id="popoverLogoutBtn" type="button">
-          <i data-lucide="log-out"></i><span class="action-label">تسجيل الخروج</span>
-        </button>`;
-      dom.accountFoot.textContent = 'مرحباً بك داخل الحساب';
-      
-      const btn = dom.accountActions.querySelector('#popoverLogoutBtn');
-      if (btn) btn.addEventListener('click', handleLogout);
-    } else {
-      dom.accountActions.innerHTML = `
-        <a class="account-action primary" data-link="/login" href="/login">
-          <i data-lucide="log-in"></i><span class="action-label">تسجيل الدخول</span>
-        </a>
-        <a class="account-action" data-link="/register" href="/register">
-          <i data-lucide="user-plus"></i><span class="action-label">إنشاء حساب</span>
-        </a>
-        <button class="account-action locked" type="button" disabled>
-          <i data-lucide="shopping-bag"></i><span class="action-label">المتجر</span>
-          <span class="locked-tag">مغلق</span>
-        </button>
-        <button class="account-action locked" type="button" disabled>
-          <i data-lucide="user-circle"></i><span class="action-label">الملف الشخصي</span>
-          <span class="locked-tag">مغلق</span>
-        </button>`;
-      dom.accountFoot.textContent = 'أنشئ حساباً لفتح المتجر والبروفايل';
-    }
-    if (window.lucide?.createIcons) window.lucide.createIcons();
-  };
-
-  const applyUI = ({ in_, name, role, avatar }) => {
-    const meta = getRoleMeta(role, in_);
-    if (dom.userName) dom.userName.textContent = name || (in_ ? 'مستخدم' : 'زائر');
-    if (dom.roleLabel) dom.roleLabel.textContent = in_ ? meta.label : 'اضغط للدخول';
-    setBadge(dom.roleBadge, meta);
-    if (dom.popoverName) dom.popoverName.textContent = name || (in_ ? 'مستخدم' : 'زائر');
-    if (dom.popoverSub) dom.popoverSub.textContent = in_ ? meta.label : 'أنت غير مسجل الدخول';
-    setBadge(dom.popoverRoleBadge, meta);
-    const src = avatar || DEFAULT_AVATAR;
-    if (dom.headerAvatar) dom.headerAvatar.src = src;
-    if (dom.popoverAvatar) dom.popoverAvatar.src = src;
-    applyTheme(meta);
-    setPopoverMode(in_ ? 'logged' : 'guest');
-  };
-
-  // ============================================================
-  // 9. SIDEBAR & POPOVER LOGIC
-  // ============================================================
+  // ═══════════════════════════════════════════════════
+  // 9. POPOVER & SIDEBAR LOGIC
+  // ═══════════════════════════════════════════════════
   const openSidebar = () => {
     dom.mobileSidebar?.classList.add('open');
     dom.overlay?.classList.add('show');
-    if (window.lucide?.createIcons) window.lucide.createIcons();
+    raf(() => window.lucide?.createIcons?.());
   };
   const closeSidebar = () => {
     dom.mobileSidebar?.classList.remove('open');
@@ -619,9 +571,100 @@ export default async function homePage(ctx) {
     else openDesktopSlider();
   };
 
-  // ============================================================
-  // 10. EVENT HANDLERS
-  // ============================================================
+  // ═══════════════════════════════════════════════════
+  // 10. LOGOUT
+  // ═══════════════════════════════════════════════════
+  const handleLogout = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const btn = e.currentTarget;
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    btn.style.opacity = '0.6';
+    try {
+      if (typeof firebase !== 'undefined' && firebase.auth) await firebase.auth().signOut();
+      const m = await import('/api/auth.js').catch(() => null);
+      if (m?.logout) await m.logout();
+      if (window.__AUTH__) {
+        window.__AUTH__.isLoggedIn = false;
+        window.__AUTH__.user = null;
+        window.__AUTH__.ready = true;
+      }
+      window.dispatchEvent(new CustomEvent('auth:changed', {
+        detail: { isLoggedIn: false, displayName: 'زائر', role: 'guest', avatar: DEFAULT_AVATAR }
+      }));
+      closePopover();
+    } catch (err) {
+      console.error('[Home] Logout failed:', err);
+      alert('فشل تسجيل الخروج. حاول مرة أخرى.');
+    } finally {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+    }
+  };
+
+  // ═══════════════════════════════════════════════════
+  // 11. APPLY UI (auth state)
+  // ═══════════════════════════════════════════════════
+  const setPopoverMode = (mode) => {
+    if (!dom.accountActions) return;
+    if (mode === 'logged') {
+      dom.accountActions.innerHTML = `
+        <a class="account-action primary" data-link="/profile" href="/profile">
+          <i data-lucide="user-circle"></i><span class="action-label">الملف الشخصي</span>
+        </a>
+        <a class="account-action" data-link="/store" href="/store">
+          <i data-lucide="shopping-bag"></i><span class="action-label">المتجر</span>
+        </a>
+        <button class="account-action danger" id="popoverLogoutBtn" type="button">
+          <i data-lucide="log-out"></i><span class="action-label">تسجيل الخروج</span>
+        </button>`;
+      dom.accountFoot.textContent = 'مرحباً بك داخل الحساب';
+      const btn = dom.accountActions.querySelector('#popoverLogoutBtn');
+      if (btn) btn.addEventListener('click', handleLogout);
+    } else {
+      dom.accountActions.innerHTML = `
+        <a class="account-action primary" data-link="/login" href="/login">
+          <i data-lucide="log-in"></i><span class="action-label">تسجيل الدخول</span>
+        </a>
+        <a class="account-action" data-link="/register" href="/register">
+          <i data-lucide="user-plus"></i><span class="action-label">إنشاء حساب</span>
+        </a>
+        <button class="account-action locked" type="button" disabled>
+          <i data-lucide="shopping-bag"></i><span class="action-label">المتجر</span>
+          <span class="locked-tag">مغلق</span>
+        </button>
+        <button class="account-action locked" type="button" disabled>
+          <i data-lucide="user-circle"></i><span class="action-label">الملف الشخصي</span>
+          <span class="locked-tag">مغلق</span>
+        </button>`;
+      dom.accountFoot.textContent = 'أنشئ حساباً لفتح المتجر والبروفايل';
+    }
+    raf(() => window.lucide?.createIcons?.());
+  };
+
+  const applyUI = ({ in_, name, role, avatar }) => {
+    if (isDead) return;
+    const meta = getRoleMeta(role, in_);
+    if (dom.userName) dom.userName.textContent = name || (in_ ? 'مستخدم' : 'زائر');
+    if (dom.roleLabel) dom.roleLabel.textContent = in_ ? meta.label : 'اضغط للدخول';
+    setBadge(dom.roleBadge, meta);
+    if (dom.popoverName) dom.popoverName.textContent = name || (in_ ? 'مستخدم' : 'زائر');
+    if (dom.popoverSub) dom.popoverSub.textContent = in_ ? meta.label : 'أنت غير مسجل الدخول';
+    setBadge(dom.popoverRoleBadge, meta);
+    const src = avatar || DEFAULT_AVATAR;
+    if (dom.headerAvatar) dom.headerAvatar.src = src;
+    if (dom.popoverAvatar) dom.popoverAvatar.src = src;
+    applyTheme(meta);
+    setPopoverMode(in_ ? 'logged' : 'guest');
+  };
+
+  // Initial UI (guest) — set IMMEDIATELY so users see something
+  applyUI({ in_: false, name: 'زائر', role: 'guest' });
+
+  // ═══════════════════════════════════════════════════
+  // 12. EVENT BINDINGS (immediate)
+  // ═══════════════════════════════════════════════════
   const hMenu = (e) => { e.preventDefault(); openSidebar(); };
   const hCloseSide = (e) => { e.preventDefault(); closeSidebar(); };
   const hOverlay = () => { closeSidebar(); closePopover(); closeDesktopSlider(); };
@@ -634,6 +677,13 @@ export default async function homePage(ctx) {
   };
   const hSliderToggle = (e) => { e.stopPropagation(); toggleDesktopSlider(); };
   const hSliderClose = () => { closeDesktopSlider(); };
+  const hVisible = () => {
+    const hidden = document.hidden;
+    state.slider.paused = hidden;
+    if (dom.ticker) dom.ticker.style.animationPlayState = hidden ? 'paused' : 'running';
+    if (hidden) stopSliderAutoplay();
+    else if (state.slider.data.length) startSliderAutoplay();
+  };
 
   dom.menuBtn?.addEventListener('pointerdown', hMenu);
   dom.closeSidebarBtn?.addEventListener('pointerdown', hCloseSide);
@@ -643,6 +693,7 @@ export default async function homePage(ctx) {
   document.addEventListener('pointerdown', hDocPop, { passive: true });
   dom.sliderToggleBtn?.addEventListener('pointerdown', hSliderToggle);
   dom.dtsCloseBtn?.addEventListener('pointerdown', hSliderClose);
+  document.addEventListener('visibilitychange', hVisible, { passive: true });
 
   cleanup.push(
     () => dom.menuBtn?.removeEventListener('pointerdown', hMenu),
@@ -653,67 +704,103 @@ export default async function homePage(ctx) {
     () => document.removeEventListener('pointerdown', hDocPop),
     () => dom.sliderToggleBtn?.removeEventListener('pointerdown', hSliderToggle),
     () => dom.dtsCloseBtn?.removeEventListener('pointerdown', hSliderClose),
+    () => document.removeEventListener('visibilitychange', hVisible),
   );
 
-  // ============================================================
-  // 11. ENHANCED SLIDER NAVIGATION
-  // ============================================================
-  let currentSlide = 0, totalSlides = 0, sliderInterval = null;
-  let touchStartX = 0, touchEndX = 0;
+  // ═══════════════════════════════════════════════════
+  // 13. SLIDER (immediate setup, async data)
+  // ═══════════════════════════════════════════════════
+  let touchStartX = 0, touchEndX = 0, touchStartY = 0, touchEndY = 0;
 
   const updateSliderPosition = (index) => {
-    if (!dom.sliderTrack || totalSlides === 0) return;
-    dom.sliderTrack.style.transform = `translate3d(${index * -100}%, 0, 0)`;
+    if (!dom.sliderTrack || state.slider.total === 0) return;
+    dom.sliderTrack.style.transform = `translate3d(${-index * 100}%, 0, 0)`;
     const dots = dom.sliderDots?.querySelectorAll('.dot');
-    dots?.forEach((dot, i) => { dot.classList.toggle('active', i === index); });
+    dots?.forEach((dot, i) => dot.classList.toggle('active', i === index));
   };
 
   const goToSlide = (index) => {
-    if (totalSlides === 0) return;
-    currentSlide = ((index % totalSlides) + totalSlides) % totalSlides;
-    updateSliderPosition(currentSlide);
+    if (state.slider.total === 0) return;
+    state.slider.current = ((index % state.slider.total) + state.slider.total) % state.slider.total;
+    updateSliderPosition(state.slider.current);
   };
 
-  const nextSlide = () => goToSlide(currentSlide + 1);
-  const prevSlide = () => goToSlide(currentSlide - 1);
-  const startSliderAutoplay = (interval = 6000) => {
-    if (sliderInterval) clearInterval(sliderInterval);
-    sliderInterval = setInterval(nextSlide, interval);
+  const nextSlide = () => goToSlide(state.slider.current + 1);
+  const prevSlide = () => goToSlide(state.slider.current - 1);
+  const startSliderAutoplay = (interval = 5200) => {
+    stopSliderAutoplay();
+    if (!state.slider.data.length) return;
+    state.slider.interval = setInterval(() => {
+      if (!state.slider.paused && state.slider.data.length) nextSlide();
+    }, interval);
   };
   const stopSliderAutoplay = () => {
-    if (sliderInterval) { clearInterval(sliderInterval); sliderInterval = null; }
+    if (state.slider.interval) { clearInterval(state.slider.interval); state.slider.interval = null; }
   };
 
-  dom.sliderPrev?.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); stopSliderAutoplay(); prevSlide(); startSliderAutoplay(); });
-  dom.sliderNext?.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); stopSliderAutoplay(); nextSlide(); startSliderAutoplay(); });
-  
-  dom.sliderContainer?.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; stopSliderAutoplay(); }, { passive: true });
-  dom.sliderContainer?.addEventListener('touchmove', (e) => { touchEndX = e.touches[0].clientX; }, { passive: true });
+  dom.sliderPrev?.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    stopSliderAutoplay(); prevSlide(); startSliderAutoplay();
+  });
+  dom.sliderNext?.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    stopSliderAutoplay(); nextSlide(); startSliderAutoplay();
+  });
+
+  // Better touch support (horizontal swipe only, not vertical scroll)
+  dom.sliderContainer?.addEventListener('touchstart', (e) => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    stopSliderAutoplay();
+  }, { passive: true });
+  dom.sliderContainer?.addEventListener('touchmove', (e) => {
+    touchEndX = e.touches[0].clientX;
+    touchEndY = e.touches[0].clientY;
+  }, { passive: true });
   dom.sliderContainer?.addEventListener('touchend', () => {
-    const diff = touchStartX - touchEndX;
-    if (Math.abs(diff) > 50) diff > 0 ? nextSlide() : prevSlide();
+    const dx = touchStartX - touchEndX;
+    const dy = Math.abs(touchStartY - touchEndY);
+    // Only horizontal swipe
+    if (Math.abs(dx) > 50 && dy < 60) dx > 0 ? nextSlide() : prevSlide();
     startSliderAutoplay();
   });
 
-  // ============================================================
-  // 12. AUTH STATE MANAGEMENT
-  // ============================================================
-  const syncAuthState = () => {
-    const state = window.__AUTH__;
-    if (!state || !state.ready) {
-      applyUI({ in_: false, name: 'زائر', role: 'guest', avatar: DEFAULT_AVATAR });
-      return;
-    }
-    applyUI({
-      in_: state.isLoggedIn,
-      name: state.displayName || (state.isLoggedIn ? 'مستخدم' : 'زائر'),
-      role: state.role || (state.isLoggedIn ? 'member' : 'guest'),
-      avatar: state.avatar || DEFAULT_AVATAR,
+  // Pause on hover (desktop)
+  dom.sliderContainer?.addEventListener('mouseenter', stopSliderAutoplay);
+  dom.sliderContainer?.addEventListener('mouseleave', () => state.slider.data.length && startSliderAutoplay());
+  cleanup.push(
+    () => dom.sliderContainer?.removeEventListener('mouseenter', stopSliderAutoplay),
+    () => dom.sliderContainer?.removeEventListener('mouseleave', () => state.slider.data.length && startSliderAutoplay()),
+  );
+
+  // ═══════════════════════════════════════════════════
+  // 14. SCROLL (rAF-based, GPU hint)
+  // ═══════════════════════════════════════════════════
+  const onScroll = () => {
+    if (state.scroll.ticking) return;
+    state.scroll.ticking = true;
+    raf(() => {
+      dom.mainHeader?.classList.toggle('main-header--scrolled', window.scrollY > 50);
+      if (!state.scroll.isScrolling) {
+        state.scroll.isScrolling = true;
+        document.body.classList.add('is-scrolling');
+      }
+      clearTimeout(state.scroll.stopTimer);
+      state.scroll.stopTimer = setTimeout(() => {
+        state.scroll.isScrolling = false;
+        document.body.classList.remove('is-scrolling');
+      }, 150);
+      state.scroll.ticking = false;
     });
   };
-  syncAuthState();
+  window.addEventListener('scroll', onScroll, { passive: true });
+  cleanup.push(() => window.removeEventListener('scroll', onScroll));
 
+  // ═══════════════════════════════════════════════════
+  // 15. AUTH STATE LISTENER (immediate)
+  // ═══════════════════════════════════════════════════
   const onAuthChanged = (e) => {
+    if (isDead) return;
     const d = e.detail || {};
     applyUI({
       in_: d.isLoggedIn,
@@ -725,111 +812,97 @@ export default async function homePage(ctx) {
   window.addEventListener('auth:changed', onAuthChanged);
   cleanup.push(() => window.removeEventListener('auth:changed', onAuthChanged));
 
-  // ============================================================
-  // 13. HEADER SCROLL EFFECT & SCROLL STATE FOR GPU
-  // ============================================================
-  let scrollTicking = false;
-  let isScrolling = false;
-  let scrollStopTimer = null;
-
-  const onScroll = () => {
-    if (scrollTicking) return;
-    scrollTicking = true;
-    requestAnimationFrame(() => {
-      dom.mainHeader?.classList.toggle('main-header--scrolled', window.scrollY > 50);
-      
-      if (!isScrolling) {
-        isScrolling = true;
-        document.body.classList.add('is-scrolling');
-      }
-      clearTimeout(scrollStopTimer);
-      scrollStopTimer = setTimeout(() => {
-        isScrolling = false;
-        document.body.classList.remove('is-scrolling');
-      }, 150);
-
-      scrollTicking = false;
-    });
+  // ═══════════════════════════════════════════════════
+  // 16. ASYNC: LUCIDE (fire-and-forget)
+  // ═══════════════════════════════════════════════════
+  const loadLucide = () => {
+    if (window.lucide?.createIcons) { window.lucide.createIcons(); return; }
+    let s = document.createElement('script');
+    s.src = 'https://unpkg.com/lucide@latest/dist/umd/lucide.min.js';
+    s.async = true;
+    s.crossOrigin = 'anonymous';
+    s.onload = () => safeRun(() => window.lucide?.createIcons?.());
+    s.onerror = () => {
+      const s2 = document.createElement('script');
+      s2.src = 'https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js';
+      s2.async = true;
+      s2.onload = () => safeRun(() => window.lucide?.createIcons?.());
+      document.head.appendChild(s2);
+    };
+    document.head.appendChild(s);
   };
-  window.addEventListener('scroll', onScroll, { passive: true });
-  cleanup.push(() => window.removeEventListener('scroll', onScroll));
+  loadLucide();
 
-  // ============================================================
-  // 14. AEGIS ENGINE INTEGRATION (FIXED - Guaranteed Load)
-  // ============================================================
+  // ═══════════════════════════════════════════════════
+  // 17. ASYNC: AUTH (fire-and-forget)
+  // ═══════════════════════════════════════════════════
+  import('/api/auth.js').then((m) => {
+    if (isDead) return;
+    if (m?.waitForAuth) m.waitForAuth(5000).catch(() => {});
+  }).catch((err) => console.warn('[Home] Auth:', err.message));
+
+  // ═══════════════════════════════════════════════════
+  // 18. ASYNC: AEGIS ENGINE (fire-and-forget)
+  // ═══════════════════════════════════════════════════
   dom.heroSection?.classList.add('ready');
 
-  let engine = null;
-  try {
-    // Wait for DOM to settle
-    await new Promise(r => requestAnimationFrame(r));
-    
-    let AegisEngineClass = window.AegisEngine;
-    
-    // 🔥 If not on window, try direct import
-    if (typeof AegisEngineClass !== 'function') {
-      try {
-        const mod = await import('/api/anilist.js');
-        AegisEngineClass = mod?.AegisEngine || mod?.default || window.AegisEngine;
-      } catch (importErr) {
-        console.warn('[Home] Direct import of AegisEngine failed:', importErr.message);
+  (async () => {
+    if (isDead) return;
+    try {
+      let AegisEngineClass = window.AegisEngine;
+      if (typeof AegisEngineClass !== 'function') {
+        try {
+          const mod = await import('/api/anilist.js');
+          AegisEngineClass = mod?.AegisEngine || mod?.default || window.AegisEngine;
+        } catch {}
       }
-    }
-    
-    // 🔥 Final fallback: Wait for window.AegisEngine
-    if (typeof AegisEngineClass !== 'function') {
-      AegisEngineClass = await new Promise((resolve) => {
-        if (typeof window.AegisEngine === 'function') return resolve(window.AegisEngine);
-        const start = performance.now();
-        const tick = () => {
+      if (typeof AegisEngineClass !== 'function') {
+        AegisEngineClass = await new Promise((resolve) => {
           if (typeof window.AegisEngine === 'function') return resolve(window.AegisEngine);
-          if (performance.now() - start > 8000) return resolve(null);
-          requestAnimationFrame(tick);
-        };
-        tick();
-      });
-    }
-
-    if (typeof AegisEngineClass === 'function') {
-      engine = new AegisEngineClass(root);
-      
-      // FIX: Hijack navigation for path segments
-      if (typeof engine.go === 'function') {
-        const safeGo = (path) => {
-          const strPath = String(path || '');
-          const watchMatch = strPath.match(/\/watch\?id=([^&]+)&ep=(.+)$/);
-          if (watchMatch) {
-            go(`/watch/${watchMatch[1]}/${watchMatch[2]}`);
-          } else {
-            go(strPath);
-          }
-        };
-        engine.go = safeGo;
+          const start = performance.now();
+          const tick = () => {
+            if (isDead) return resolve(null);
+            if (typeof window.AegisEngine === 'function') return resolve(window.AegisEngine);
+            if (performance.now() - start > 8000) return resolve(null);
+            raf(tick);
+          };
+          tick();
+        });
       }
-      
-      await engine.init();
-      console.log('[Home] ✅ AegisEngine initialized successfully');
-    } else {
-      throw new Error('AegisEngine class not available');
+      if (isDead) return;
+      if (typeof AegisEngineClass === 'function') {
+        const engine = new AegisEngineClass(root);
+        if (typeof engine.go === 'function') {
+          const safeGo = (path) => {
+            const strPath = String(path || '');
+            const watchMatch = strPath.match(/\/watch\?id=([^&]+)&ep=(.+)$/);
+            if (watchMatch) go(`/watch/${watchMatch[1]}/${watchMatch[2]}`);
+            else go(strPath);
+          };
+          engine.go = safeGo;
+        }
+        state.aegisEngine = engine;
+        await engine.init();
+        if (!isDead) console.log('[Home] ✅ AegisEngine ready');
+      }
+    } catch (err) {
+      if (isDead) return;
+      console.warn('[Home] ⚠️ AegisEngine failed:', err.message);
+      const grid = dom.animeGrid;
+      if (grid) {
+        grid.innerHTML = `
+          <div class="soft-fail" style="grid-column:1/-1;text-align:center;padding:40px 20px;">
+            <p style="margin-bottom:14px;font-size:1rem;">⚠️ تعذر جلب بيانات الأنمي</p>
+            <button id="retryEngineBtn" style="padding:10px 20px;border-radius:12px;background:var(--gold);color:#000;border:none;font-weight:800;cursor:pointer;font-family:'Cairo';">إعادة المحاولة</button>
+          </div>`;
+        grid.querySelector('#retryEngineBtn')?.addEventListener('click', () => go('/'));
+      }
     }
-  } catch (err) {
-    console.warn('[Home] ⚠️ AegisEngine failed:', err.message);
-    const grid = root.querySelector('#animeGrid');
-    if (grid) {
-      grid.innerHTML = `
-        <div class="soft-fail" style="grid-column:1/-1;text-align:center;padding:40px 20px;">
-          <p style="margin-bottom:14px;font-size:1rem;">⚠️ تعذر جلب بيانات الأنمي</p>
-          <button id="retryEngineBtn" style="padding:10px 20px;border-radius:12px;background:var(--gold);color:#000;border:none;font-weight:800;cursor:pointer;font-family:'Cairo';">إعادة المحاولة</button>
-        </div>`;
-      grid.querySelector('#retryEngineBtn')?.addEventListener('click', () => {
-        go('/');
-      });
-    }
-  }
+  })();
 
-  // ============================================================
-  // 15. APP HEIGHT & RESIZE
-  // ============================================================
+  // ═══════════════════════════════════════════════════
+  // 19. RESIZE & APP HEIGHT
+  // ═══════════════════════════════════════════════════
   const setAppHeight = () => {
     document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
   };
@@ -841,14 +914,17 @@ export default async function homePage(ctx) {
     () => window.removeEventListener('orientationchange', setAppHeight),
   );
 
-  // ============================================================
-  // 16. CLEANUP
-  // ============================================================
+  // ═══════════════════════════════════════════════════
+  // 20. CLEANUP
+  // ═══════════════════════════════════════════════════
   const runCleanup = () => {
+    markDead();
     stopSliderAutoplay();
-    clearTimeout(scrollStopTimer);
-    for (const fn of cleanup) { try { fn(); } catch {} }
-    if (engine?.destroy) { try { engine.destroy(); } catch {} }
+    clearTimeout(state.scroll.stopTimer);
+    clearTimeout(timers.search);
+    clearTimeout(timers.suggest);
+    for (const fn of cleanup) safeRun(fn);
+    if (state.aegisEngine?.destroy) safeRun(() => state.aegisEngine.destroy());
   };
 
   if (typeof onCleanup === 'function') onCleanup(runCleanup);
